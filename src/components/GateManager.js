@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { gateService } from '../api/gateService';
 import { reviewService } from '../api/reviewService';
-import { isGateLocked, isGateCompleted, statusLabel } from '../utils/gateStatus';
+import { isGateLocked, isGateCompleted, statusLabel, isValidDateRange } from '../utils/gateStatus';
 import { extractReviewInfo, syncAndSaveGates, getReviewerNames } from '../utils/reviewSync';
 import SendReviewModal from './SendReviewModal';
 import StatusBadge from './ui/StatusBadge';
@@ -35,6 +35,10 @@ const GateManager = ({ selectedHub, selectedProject }) => {
   const [editPhaseDraft, setEditPhaseDraft] = useState({ name: '', startDate: '', finishDate: '' });
   const [newGateName, setNewGateName] = useState('');
   const [newGatePhaseId, setNewGatePhaseId] = useState('');
+  const [newGateStart, setNewGateStart] = useState('');
+  const [newGateFinish, setNewGateFinish] = useState('');
+  const [editingGateId, setEditingGateId] = useState(null);
+  const [editGateDraft, setEditGateDraft] = useState({ name: '', startDate: '', finishDate: '' });
   const [criterionDraft, setCriterionDraft] = useState({});
   const [reviewModalTarget, setReviewModalTarget] = useState(null); // { gateId, criterionId }
 
@@ -87,6 +91,10 @@ const GateManager = ({ selectedHub, selectedProject }) => {
 
   const addPhase = () => {
     if (!newPhaseName.trim()) return;
+    if (!isValidDateRange(newPhaseStart, newPhaseFinish)) {
+      setError('Phase finish date must be on or after its start date.');
+      return;
+    }
     persistPhases([
       ...phases,
       {
@@ -109,6 +117,10 @@ const GateManager = ({ selectedHub, selectedProject }) => {
 
   const saveEditPhase = () => {
     if (!editPhaseDraft.name.trim()) return;
+    if (!isValidDateRange(editPhaseDraft.startDate, editPhaseDraft.finishDate)) {
+      setError('Phase finish date must be on or after its start date.');
+      return;
+    }
     persistPhases(
       phases.map((p) =>
         p.id === editingPhaseId
@@ -127,21 +139,56 @@ const GateManager = ({ selectedHub, selectedProject }) => {
     persistGates(gates.map((g) => (g.phaseId === phaseId ? { ...g, phaseId: null } : g)));
   };
 
-  const formatDateRange = (phase) => {
-    if (!phase.startDate && !phase.finishDate) return null;
+  const formatDateRange = (item) => {
+    if (!item.startDate && !item.finishDate) return null;
     const fmt = (d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    if (phase.startDate && phase.finishDate) return `${fmt(phase.startDate)} - ${fmt(phase.finishDate)}`;
-    if (phase.startDate) return `From ${fmt(phase.startDate)}`;
-    return `Due ${fmt(phase.finishDate)}`;
+    if (item.startDate && item.finishDate) return `${fmt(item.startDate)} - ${fmt(item.finishDate)}`;
+    if (item.startDate) return `From ${fmt(item.startDate)}`;
+    return `Due ${fmt(item.finishDate)}`;
   };
 
   const addGate = () => {
     if (!newGateName.trim() || !newGatePhaseId) return;
+    if (!isValidDateRange(newGateStart, newGateFinish)) {
+      setError('Gate finish date must be on or after its start date.');
+      return;
+    }
     persistGates([
       ...gates,
-      { id: `gate-${Date.now()}`, name: newGateName.trim(), phaseId: newGatePhaseId, order: gates.length, criteria: [] },
+      {
+        id: `gate-${Date.now()}`,
+        name: newGateName.trim(),
+        phaseId: newGatePhaseId,
+        order: gates.length,
+        criteria: [],
+        startDate: newGateStart || null,
+        finishDate: newGateFinish || null,
+      },
     ]);
     setNewGateName('');
+    setNewGateStart('');
+    setNewGateFinish('');
+  };
+
+  const startEditGate = (gate) => {
+    setEditingGateId(gate.id);
+    setEditGateDraft({ name: gate.name, startDate: gate.startDate || '', finishDate: gate.finishDate || '' });
+  };
+
+  const saveEditGate = () => {
+    if (!editGateDraft.name.trim()) return;
+    if (!isValidDateRange(editGateDraft.startDate, editGateDraft.finishDate)) {
+      setError('Gate finish date must be on or after its start date.');
+      return;
+    }
+    persistGates(
+      gates.map((g) =>
+        g.id === editingGateId
+          ? { ...g, name: editGateDraft.name.trim(), startDate: editGateDraft.startDate || null, finishDate: editGateDraft.finishDate || null }
+          : g
+      )
+    );
+    setEditingGateId(null);
   };
 
   const deleteGate = (gateId) => persistGates(gates.filter((g) => g.id !== gateId));
@@ -294,6 +341,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
                       <input
                         type="date"
                         value={editPhaseDraft.finishDate}
+                        min={editPhaseDraft.startDate || undefined}
                         onChange={(e) => setEditPhaseDraft((prev) => ({ ...prev, finishDate: e.target.value }))}
                         className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg"
                       />
@@ -348,6 +396,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
             <input
               type="date"
               value={newPhaseFinish}
+              min={newPhaseStart || undefined}
               onChange={(e) => setNewPhaseFinish(e.target.value)}
               title="Finish date"
               className="px-3.5 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200"
@@ -380,6 +429,21 @@ const GateManager = ({ selectedHub, selectedProject }) => {
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
+            <input
+              type="date"
+              value={newGateStart}
+              onChange={(e) => setNewGateStart(e.target.value)}
+              title="Start date"
+              className="px-3.5 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+            <input
+              type="date"
+              value={newGateFinish}
+              min={newGateStart || undefined}
+              onChange={(e) => setNewGateFinish(e.target.value)}
+              title="Finish date"
+              className="px-3.5 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
             <button
               onClick={addGate}
               disabled={!newGateName.trim()}
@@ -404,30 +468,75 @@ const GateManager = ({ selectedHub, selectedProject }) => {
             const status = statusLabel(gate, sortedGates);
             const expanded = expandedGateId === gate.id;
             const phase = phases.find((p) => p.id === gate.phaseId);
+            const gateEditing = editingGateId === gate.id;
+            const gateDateRange = formatDateRange(gate);
 
             return (
               <div key={gate.id} className="bg-white rounded-2xl border border-slate-200/70 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
-                <button
-                  onClick={() => setExpandedGateId(expanded ? null : gate.id)}
-                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/70 transition-colors"
-                >
-                  <div className="flex items-center gap-2.5 text-left">
-                    {expanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">{gate.name}</div>
-                      {phase && <div className="text-xs text-slate-400">{phase.name}</div>}
+                {gateEditing ? (
+                  <div className="flex flex-wrap items-center gap-2 px-5 py-3.5 bg-slate-50/60">
+                    <input
+                      value={editGateDraft.name}
+                      onChange={(e) => setEditGateDraft((prev) => ({ ...prev, name: e.target.value }))}
+                      className="flex-1 min-w-[120px] px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg"
+                    />
+                    <input
+                      type="date"
+                      value={editGateDraft.startDate}
+                      onChange={(e) => setEditGateDraft((prev) => ({ ...prev, startDate: e.target.value }))}
+                      className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg"
+                    />
+                    <span className="text-slate-300 text-sm">-</span>
+                    <input
+                      type="date"
+                      value={editGateDraft.finishDate}
+                      min={editGateDraft.startDate || undefined}
+                      onChange={(e) => setEditGateDraft((prev) => ({ ...prev, finishDate: e.target.value }))}
+                      className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg"
+                    />
+                    <button onClick={saveEditGate} className="p-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => setEditingGateId(null)} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setExpandedGateId(expanded ? null : gate.id)}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 text-left">
+                      {expanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">{gate.name}</div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          {phase && <span>{phase.name}</span>}
+                          {gateDateRange && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" /> {gateDateRange}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={status} />
-                    <span
-                      onClick={(e) => { e.stopPropagation(); deleteGate(gate.id); }}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </span>
-                  </div>
-                </button>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={status} />
+                      <span
+                        onClick={(e) => { e.stopPropagation(); startEditGate(gate); }}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-300 hover:text-slate-600 cursor-pointer"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </span>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); deleteGate(gate.id); }}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+                )}
 
                 {expanded && (
                   <div className="border-t border-slate-100 px-5 py-4 space-y-3 bg-slate-50/40">

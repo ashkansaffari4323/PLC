@@ -1,8 +1,8 @@
 const express = require('express');
 const crypto = require('crypto');
 const aps = require('../apsClient');
-const sessionStore = require('../sessionStore');
-const { requireAuth, SESSION_COOKIE } = require('../middleware/requireAuth');
+const { encryptSession, decryptSession } = require('../cookieSession');
+const { requireAuth, SESSION_COOKIE, cookieOptions } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
@@ -31,15 +31,7 @@ router.get('/callback', async (req, res) => {
 
   try {
     const tokenData = await aps.exchangeCodeForToken(code);
-    const sessionId = sessionStore.createSession(tokenData);
-
-    res.cookie(SESSION_COOKIE, sessionId, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days; refresh token carries the session forward
-    });
-
+    res.cookie(SESSION_COOKIE, encryptSession(tokenData), cookieOptions);
     res.redirect(FRONTEND_URL);
   } catch (err) {
     console.error('Failed to exchange APS auth code:', err.message, err.details);
@@ -49,8 +41,7 @@ router.get('/callback', async (req, res) => {
 
 // Frontend polls this to know whether it should show "Sign in" or the app.
 router.get('/status', async (req, res) => {
-  const sessionId = req.cookies?.[SESSION_COOKIE];
-  const session = sessionStore.getSession(sessionId);
+  const session = decryptSession(req.cookies?.[SESSION_COOKIE]);
 
   if (!session) {
     return res.json({ authenticated: false });
@@ -63,8 +54,6 @@ router.get('/status', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  const sessionId = req.cookies?.[SESSION_COOKIE];
-  if (sessionId) sessionStore.destroySession(sessionId);
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
 });

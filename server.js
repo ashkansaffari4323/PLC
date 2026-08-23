@@ -38,7 +38,7 @@ app.use('/api', gateRoutes);   // /api/projects/:projectId/gates, /phases, /api/
 if (process.env.NODE_ENV === 'production') {
   const buildPath = path.join(__dirname, 'build');
   app.use(express.static(buildPath));
-  app.get('*', (req, res) => {
+  app.get('/*splat', (req, res) => {
     if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
     res.sendFile(path.join(buildPath, 'index.html'));
   });

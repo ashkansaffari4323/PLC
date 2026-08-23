@@ -9,6 +9,7 @@ import EmptyState from './ui/EmptyState';
 import GateStatusPie from './charts/GateStatusPie';
 import PhaseCompletionBar from './charts/PhaseCompletionBar';
 import PhaseGanttChart from './charts/PhaseGanttChart';
+import GateGanttChart from './charts/GateGanttChart';
 
 const StatCard = ({ icon: Icon, label, value, tone }) => {
   const tones = {
@@ -157,9 +158,12 @@ const ProjectDashboard = ({ selectedProject }) => {
             </div>
           </div>
 
-          <div className="mb-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
             <ChartCard title="Phase timeline">
               <PhaseGanttChart phases={phases} gates={sorted} />
+            </ChartCard>
+            <ChartCard title="Gate timeline">
+              <GateGanttChart gates={sorted} />
             </ChartCard>
           </div>
         </>

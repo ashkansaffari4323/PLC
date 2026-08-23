@@ -54,3 +54,9 @@ export function statusLabel(gate, allGatesInProject) {
   if (isGateInProgress(gate)) return 'in-progress';
   return 'pending';
 }
+
+/** Both phases and gates share this rule: a finish date can't be before its start date. */
+export function isValidDateRange(startDate, finishDate) {
+  if (!startDate || !finishDate) return true; // one or both unset - nothing to compare yet
+  return new Date(finishDate).getTime() >= new Date(startDate).getTime();
+}

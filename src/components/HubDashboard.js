@@ -11,6 +11,7 @@ import PageHeader from './ui/PageHeader';
 import EmptyState from './ui/EmptyState';
 import GateStatusPie from './charts/GateStatusPie';
 import ProjectCompletionBar from './charts/ProjectCompletionBar';
+import GanttChart from './charts/GanttChart';
 
 const ChartCard = ({ title, children }) => (
   <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-4">
@@ -222,6 +223,33 @@ const HubDashboard = ({ selectedHub }) => {
     })
     .sort((a, b) => b.pct - a.pct);
 
+  // One timeline row per project: spans from the earliest scheduled
+  // phase/gate date to the latest, across the whole project, colored by
+  // overall completion. Projects with no dates set anywhere just don't
+  // appear on the timeline (GanttChart lists them separately as
+  // "not scheduled").
+  const timelineItems = projects.map((project) => {
+    const data = projectData[project.id] || { gates: [], phases: [] };
+    const summary = summarizeGates(data.gates);
+    const allDates = [...(data.gates || []), ...(data.phases || [])]
+      .flatMap((item) => [item.startDate, item.finishDate])
+      .filter(Boolean);
+    return {
+      id: project.id,
+      name: project.name,
+      startDate: allDates.length > 0 ? allDates.reduce((a, b) => (a < b ? a : b)) : null,
+      finishDate: allDates.length > 0 ? allDates.reduce((a, b) => (a > b ? a : b)) : null,
+      _summary: summary,
+    };
+  });
+
+  const getTimelineColor = (item) => {
+    if (item._summary.total === 0) return '#cbd5e1';
+    if (item._summary.completed === item._summary.total) return '#10b981';
+    if (item._summary.locked === item._summary.total) return '#94a3b8';
+    return '#3b82f6';
+  };
+
   const filteredProjects = projects.filter((p) => p.name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -277,6 +305,16 @@ const HubDashboard = ({ selectedHub }) => {
               </div>
             </div>
           )}
+
+          <div className="mb-5">
+            <ChartCard title="Project timeline">
+              <GanttChart
+                items={timelineItems}
+                getColor={getTimelineColor}
+                emptyMessage="No phase or gate dates set anywhere in this hub yet - add them in a project's Gates & Phases tab to see a timeline here."
+              />
+            </ChartCard>
+          </div>
 
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
