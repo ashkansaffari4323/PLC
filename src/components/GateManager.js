@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, RefreshCw, Send, Trash2, ChevronDown, ChevronRight,
-  FileText, ShieldCheck, Layers, RotateCcw, History, Pencil, Calendar, Check, X, UserCheck,
+  FileText, ShieldCheck, Layers, RotateCcw, History, Pencil, Calendar, Check, X, UserCheck, FileUp,
 } from 'lucide-react';
 import { gateService } from '../api/gateService';
 import { reviewService } from '../api/reviewService';
 import { isGateLocked, isGateCompleted, statusLabel, isValidDateRange } from '../utils/gateStatus';
 import { extractReviewInfo, syncAndSaveGates, getReviewerNames } from '../utils/reviewSync';
 import SendReviewModal from './SendReviewModal';
+import ImportXmlModal from './ImportXmlModal';
 import StatusBadge from './ui/StatusBadge';
 import PageHeader from './ui/PageHeader';
 import EmptyState from './ui/EmptyState';
@@ -41,6 +42,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
   const [editGateDraft, setEditGateDraft] = useState({ name: '', startDate: '', finishDate: '' });
   const [criterionDraft, setCriterionDraft] = useState({});
   const [reviewModalTarget, setReviewModalTarget] = useState(null); // { gateId, criterionId }
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const projectId = selectedProject?.id;
 
@@ -193,6 +195,25 @@ const GateManager = ({ selectedHub, selectedProject }) => {
 
   const deleteGate = (gateId) => persistGates(gates.filter((g) => g.id !== gateId));
 
+  // Rows come in from ImportXmlModal already validated (start <= finish)
+  // and pre-mapped to {name, startDate, finishDate, phaseId}. Order picks
+  // up where the existing gate list leaves off, and each starts with no
+  // criteria - reviews get added afterward the normal way.
+  const handleImportGates = (importedGates) => {
+    const startingOrder = gates.length;
+    const newGates = importedGates.map((g, i) => ({
+      id: `gate-${Date.now()}-${i}`,
+      name: g.name,
+      phaseId: g.phaseId,
+      order: startingOrder + i,
+      criteria: [],
+      startDate: g.startDate,
+      finishDate: g.finishDate,
+    }));
+    persistGates([...gates, ...newGates]);
+    setShowImportModal(false);
+  };
+
   const addCriterion = (gateId) => {
     const text = (criterionDraft[gateId] || '').trim();
     if (!text) return;
@@ -295,15 +316,24 @@ const GateManager = ({ selectedHub, selectedProject }) => {
         title="Gates & Phases"
         subtitle={selectedProject.name}
         actions={
-          <button
-            onClick={syncAll}
-            disabled={syncing || !anyReviewsAttached}
-            title={anyReviewsAttached ? 'Fetch the latest ACC review status for every gate' : 'No reviews sent yet'}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 shadow-sm"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            Sync live status
-          </button>
+          <>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-xl border border-slate-200 bg-white hover:bg-slate-50 shadow-sm"
+            >
+              <FileUp className="h-4 w-4" />
+              Import from XML
+            </button>
+            <button
+              onClick={syncAll}
+              disabled={syncing || !anyReviewsAttached}
+              title={anyReviewsAttached ? 'Fetch the latest ACC review status for every gate' : 'No reviews sent yet'}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 shadow-sm"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+              Sync live status
+            </button>
+          </>
         }
       />
 
@@ -664,6 +694,14 @@ const GateManager = ({ selectedHub, selectedProject }) => {
           })()}
           onSend={handleSendForReview}
           onClose={() => setReviewModalTarget(null)}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportXmlModal
+          phases={phases}
+          onImport={handleImportGates}
+          onClose={() => setShowImportModal(false)}
         />
       )}
     </div>
