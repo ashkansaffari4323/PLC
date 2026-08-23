@@ -12,6 +12,13 @@ const reviewRoutes = require('./server/routes/reviews');
 const gateRoutes = require('./server/routes/gates');
 
 const app = express();
+// Vercel (and most platforms) terminate HTTPS and forward requests
+// internally over plain HTTP, signaling the original scheme via
+// X-Forwarded-Proto. Without this, req.protocol always reports "http"
+// even on an https deployment - which would break the frontend-URL
+// fallback in auth.js (building an http:// redirect on an https:// site)
+// and any secure-cookie logic that checks req.secure.
+app.set('trust proxy', 1);
 // Named SERVER_PORT (not PORT) because Create React App's dev server also
 // reads PORT from this same .env file for its own port - reusing PORT here
 // would make the backend and frontend fight over the same port.

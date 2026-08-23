@@ -6,8 +6,18 @@ const { requireAuth, SESSION_COOKIE, cookieOptions } = require('../middleware/re
 
 const router = express.Router();
 
-// Where to send the browser back to after a successful/failed login.
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+// Where to send the browser back to after a successful/failed login. If
+// FRONTEND_URL isn't set, fall back to whatever host actually served this
+// request - correct for any single-domain deployment (Vercel, a plain VM
+// serving both API and frontend) without needing a separately-configured
+// variable that's easy to forget or leave pointed at localhost.
+function resolveFrontendUrl(req) {
+  if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
+  // req.get('host') reads the raw Host header, which isn't proxy-aware -
+  // behind Vercel's proxy the real public host is in X-Forwarded-Host.
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  return `${req.protocol}://${host}`;
+}
 
 // Kicks off 3-legged sign-in: redirect the browser to Autodesk's login page.
 router.get('/login', (req, res) => {
@@ -19,23 +29,24 @@ router.get('/login', (req, res) => {
 // Autodesk redirects back here with a one-time code after the user signs in.
 router.get('/callback', async (req, res) => {
   const { code, error, error_description: errorDescription } = req.query;
+  const frontendUrl = resolveFrontendUrl(req);
 
   if (error) {
     console.error('APS login error:', error, errorDescription);
-    return res.redirect(`${FRONTEND_URL}/?authError=${encodeURIComponent(errorDescription || error)}`);
+    return res.redirect(`${frontendUrl}/?authError=${encodeURIComponent(errorDescription || error)}`);
   }
 
   if (!code) {
-    return res.redirect(`${FRONTEND_URL}/?authError=missing_code`);
+    return res.redirect(`${frontendUrl}/?authError=missing_code`);
   }
 
   try {
     const tokenData = await aps.exchangeCodeForToken(code);
     res.cookie(SESSION_COOKIE, encryptSession(tokenData), cookieOptions);
-    res.redirect(FRONTEND_URL);
+    res.redirect(frontendUrl);
   } catch (err) {
     console.error('Failed to exchange APS auth code:', err.message, err.details);
-    res.redirect(`${FRONTEND_URL}/?authError=token_exchange_failed`);
+    res.redirect(`${frontendUrl}/?authError=token_exchange_failed`);
   }
 });
 
