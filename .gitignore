@@ -1,0 +1,9 @@
+node_modules/
+build/
+.env
+data/gates/*.json
+data/phases/*.json
+!data/gates/.gitkeep
+!data/phases/.gitkeep
+npm-debug.log*
+.DS_Store

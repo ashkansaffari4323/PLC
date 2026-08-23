@@ -1,0 +1,5 @@
+{
+  "watch": ["server.js", "server/"],
+  "ext": "js,json",
+  "ignore": ["data/"]
+}
