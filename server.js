@@ -44,12 +44,21 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 PLC backend running on http://localhost:${PORT}`);
-  console.log('Available endpoint groups:');
-  console.log('  /api/auth/*   - 3-legged login/callback/status, 2-legged status');
-  console.log('  /api/hubs/*   - hubs and hub projects');
-  console.log('  /api/*folders - top folders and folder contents');
-  console.log('  /api/projects/:id/reviews* , /workflows - ACC Reviews proxy');
-  console.log('  /api/projects/:id/gates , /phases, /api/hub/gates - gate/phase storage\n');
-});
+// Vercel runs this file as a serverless function - it imports the exported
+// app and invokes it per-request rather than expecting us to bind a port
+// ourselves, so app.listen() must be skipped there (Vercel sets its own
+// VERCEL env var at runtime). Everywhere else (local dev, a plain VM/
+// container deployment) this runs as a normal always-on server.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 PLC backend running on http://localhost:${PORT}`);
+    console.log('Available endpoint groups:');
+    console.log('  /api/auth/*   - 3-legged login/callback/status, 2-legged status');
+    console.log('  /api/hubs/*   - hubs and hub projects');
+    console.log('  /api/*folders - top folders and folder contents');
+    console.log('  /api/projects/:id/reviews* , /workflows - ACC Reviews proxy');
+    console.log('  /api/projects/:id/gates , /phases, /api/hub/gates - gate/phase storage\n');
+  });
+}
+
+module.exports = app;
