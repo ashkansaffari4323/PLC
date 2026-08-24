@@ -2,37 +2,56 @@ import React, { useState } from 'react';
 import { X, FileUp, AlertTriangle, Check } from 'lucide-react';
 import { isValidDateRange } from '../utils/gateStatus';
 
+/** Flattens one element's attributes and leaf child elements into { fieldName: text }. */
+function elementToFlatMap(el) {
+  const map = {};
+  for (const attr of el.attributes || []) {
+    map[attr.name] = attr.value;
+  }
+  for (const child of el.children) {
+    if (child.children.length === 0 && child.textContent.trim()) {
+      // Some exports use a generic wrapper for every field, e.g.
+      // <Field name="Start">2026-01-05</Field> - if several siblings share
+      // one tag name, that tag alone can't tell them apart, so prefer a
+      // distinguishing attribute (name/id/key/field) as the map key when
+      // one's present, falling back to the tag name otherwise.
+      const keyAttr = child.getAttribute?.('name') || child.getAttribute?.('id') || child.getAttribute?.('key') || child.getAttribute?.('field');
+      map[keyAttr || child.tagName] = child.textContent.trim();
+    }
+  }
+  return map;
+}
+
 /**
- * Finds the most-repeated element tag in the document - the heuristic for
- * "this is the row/task element" in an arbitrary XML schedule export
- * (works for MS Project XML, Primavera exports, and most flat task lists
- * without needing to know the exact schema up front).
+ * Finds the element tag that best represents "one row" of task/schedule
+ * data. Tries every repeated tag, not just the single most-repeated one -
+ * a schema like <Row><Field name="Name">X</Field>... would make "Field"
+ * more repeated than "Row" even though "Row" is the real record - so
+ * among tags where most instances yield usable data, this prefers whichever
+ * one produces the richest rows (more distinct fields per instance) rather
+ * than just the highest raw count.
  */
 function findRepeatedElements(doc) {
   const counts = {};
   for (const el of doc.getElementsByTagName('*')) {
     counts[el.tagName] = (counts[el.tagName] || 0) + 1;
   }
-  let bestTag = null;
-  let bestCount = 1;
-  Object.entries(counts).forEach(([tag, count]) => {
-    if (count > bestCount) {
-      bestCount = count;
-      bestTag = tag;
-    }
-  });
-  return bestTag ? Array.from(doc.getElementsByTagName(bestTag)) : [];
-}
 
-/** Flattens one row element's leaf children into { tagName: text }. */
-function elementToFlatMap(el) {
-  const map = {};
-  for (const child of el.children) {
-    if (child.children.length === 0) {
-      map[child.tagName] = child.textContent.trim();
-    }
-  }
-  return map;
+  const candidates = Object.entries(counts)
+    .filter(([, count]) => count > 1)
+    .map(([tag, count]) => {
+      const elements = Array.from(doc.getElementsByTagName(tag));
+      const flatMaps = elements.map(elementToFlatMap);
+      const withFields = flatMaps.filter((m) => Object.keys(m).length > 0);
+      const avgFieldCount = withFields.length > 0
+        ? withFields.reduce((sum, m) => sum + Object.keys(m).length, 0) / withFields.length
+        : 0;
+      return { tag, count, elements, coverage: withFields.length / count, avgFieldCount };
+    })
+    .filter((c) => c.coverage >= 0.5)
+    .sort((a, b) => b.avgFieldCount - a.avgFieldCount || b.count - a.count);
+
+  return candidates.length > 0 ? candidates[0].elements : [];
 }
 
 function guessField(fieldNames, keywords) {
