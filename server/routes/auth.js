@@ -45,8 +45,8 @@ router.get('/callback', async (req, res) => {
     res.cookie(SESSION_COOKIE, encryptSession(tokenData), cookieOptions);
     res.redirect(frontendUrl);
   } catch (err) {
-    console.error('Failed to exchange APS auth code:', err.message, err.details);
-    res.redirect(`${frontendUrl}/?authError=token_exchange_failed`);
+    console.error('Failed to exchange APS auth code:', err.message);
+    res.redirect(`${frontendUrl}/?authError=${encodeURIComponent(err.message)}`);
   }
 });
 

@@ -1,9 +1,9 @@
 import React from 'react';
-import { LogIn, ShieldCheck } from 'lucide-react';
+import { LogIn, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-  const { login } = useAuth();
+  const { login, loginError } = useAuth();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-indigo-50 px-4">
@@ -12,9 +12,17 @@ const Login = () => {
           <ShieldCheck className="h-7 w-7" />
         </div>
         <h1 className="text-lg font-bold text-slate-900 mb-1.5">Project Lifecycle Control</h1>
-        <p className="text-sm text-slate-500 mb-7 leading-relaxed">
+        <p className="text-sm text-slate-500 mb-5 leading-relaxed">
           Sign in with your Autodesk account to access your hubs, projects, and gate reviews.
         </p>
+
+        {loginError && (
+          <div className="flex items-start gap-2 text-left text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3.5 py-3 mb-5">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span className="break-words">Sign-in failed: {loginError}</span>
+          </div>
+        )}
+
         <button
           onClick={login}
           className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 active:bg-indigo-800 transition-colors shadow-sm"

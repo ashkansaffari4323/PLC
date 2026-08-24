@@ -41,6 +41,16 @@ function getAuthorizeUrl(state) {
   return `${APS_AUTH_BASE}/authorize?${params.toString()}`;
 }
 
+/** Wraps an axios error so callers get Autodesk's actual response body, not just a generic HTTP status message. */
+function wrapAuthError(error, context) {
+  const status = error.response?.status;
+  const details = error.response?.data;
+  const wrapped = new Error(`${context} failed${status ? ` (${status})` : ''}${details ? `: ${JSON.stringify(details)}` : `: ${error.message}`}`);
+  wrapped.status = status || 500;
+  wrapped.details = details;
+  return wrapped;
+}
+
 /** Exchanges a 3-legged authorization code for access/refresh tokens. */
 async function exchangeCodeForToken(code) {
   const clientId = requireEnv('APS_CLIENT_ID');
@@ -53,14 +63,17 @@ async function exchangeCodeForToken(code) {
     redirect_uri: callbackUrl,
   });
 
-  const { data } = await axios.post(`${APS_AUTH_BASE}/token`, body.toString(), {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-    },
-  });
-
-  return normalizeTokenResponse(data);
+  try {
+    const { data } = await axios.post(`${APS_AUTH_BASE}/token`, body.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+    });
+    return normalizeTokenResponse(data);
+  } catch (error) {
+    throw wrapAuthError(error, 'Authorization code exchange');
+  }
 }
 
 /** Uses a refresh token to get a new 3-legged access token without re-prompting login. */
@@ -73,14 +86,17 @@ async function refreshToken(refreshTokenValue) {
     refresh_token: refreshTokenValue,
   });
 
-  const { data } = await axios.post(`${APS_AUTH_BASE}/token`, body.toString(), {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-    },
-  });
-
-  return normalizeTokenResponse(data);
+  try {
+    const { data } = await axios.post(`${APS_AUTH_BASE}/token`, body.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      },
+    });
+    return normalizeTokenResponse(data);
+  } catch (error) {
+    throw wrapAuthError(error, 'Token refresh');
+  }
 }
 
 // Cached in-process; a 2-legged token has no per-user identity so one
