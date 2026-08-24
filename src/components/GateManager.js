@@ -4,6 +4,7 @@ import {
   FileText, ShieldCheck, Layers, RotateCcw, History, Pencil, Calendar, Check, X, UserCheck, FileUp,
 } from 'lucide-react';
 import { gateService } from '../api/gateService';
+import { formatError } from '../api/client';
 import { reviewService } from '../api/reviewService';
 import { isGateLocked, isGateCompleted, statusLabel, isValidDateRange } from '../utils/gateStatus';
 import { extractReviewInfo, syncAndSaveGates, getReviewerNames } from '../utils/reviewSync';
@@ -63,7 +64,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
         setNewGatePhaseId(loadedPhases[0].id);
       }
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
     try {
       await gateService.saveGates(projectId, updated);
     } catch (err) {
-      setError(`Failed to save gates: ${err.message}`);
+      setError(`Failed to save gates: ${formatError(err)}`);
     }
   };
 
@@ -87,7 +88,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
     try {
       await gateService.savePhases(projectId, updated);
     } catch (err) {
-      setError(`Failed to save phases: ${err.message}`);
+      setError(`Failed to save phases: ${formatError(err)}`);
     }
   };
 
@@ -195,21 +196,36 @@ const GateManager = ({ selectedHub, selectedProject }) => {
 
   const deleteGate = (gateId) => persistGates(gates.filter((g) => g.id !== gateId));
 
-  // Rows come in from ImportXmlModal already validated (start <= finish)
-  // and pre-mapped to {name, startDate, finishDate, phaseId}. Order picks
-  // up where the existing gate list leaves off, and each starts with no
-  // criteria - reviews get added afterward the normal way.
-  const handleImportGates = (importedGates) => {
+  // Rows come in from ImportXmlModal already validated (start <= finish).
+  // Two shapes are possible: the generic path sends gates pre-assigned to
+  // an existing phaseId (or none), while a detected MS Project file sends
+  // both newPhases to create AND gates referencing them by array index
+  // (phaseIndex) - both get normalized into real gate/phase records here.
+  // Every imported gate starts with no criteria - reviews get added
+  // afterward through the normal Send for Review flow, same as any
+  // manually-created gate.
+  const handleImportGates = ({ newPhases, gates: importedGates }) => {
+    const phaseIdByIndex = {};
+    const createdPhases = (newPhases || []).map((p, i) => {
+      const id = `phase-${Date.now()}-${i}`;
+      phaseIdByIndex[i] = id;
+      return { id, name: p.name, order: phases.length + i, startDate: p.startDate, finishDate: p.finishDate };
+    });
+
     const startingOrder = gates.length;
     const newGates = importedGates.map((g, i) => ({
       id: `gate-${Date.now()}-${i}`,
       name: g.name,
-      phaseId: g.phaseId,
+      phaseId: g.phaseIndex != null ? phaseIdByIndex[g.phaseIndex] ?? null : g.phaseId ?? null,
       order: startingOrder + i,
       criteria: [],
       startDate: g.startDate,
       finishDate: g.finishDate,
     }));
+
+    if (createdPhases.length > 0) {
+      persistPhases([...phases, ...createdPhases]);
+    }
     persistGates([...gates, ...newGates]);
     setShowImportModal(false);
   };
@@ -292,7 +308,7 @@ const GateManager = ({ selectedHub, selectedProject }) => {
       const updated = await syncAndSaveGates(projectId, gates);
       setGates(updated);
     } catch (err) {
-      setError(`Sync failed: ${err.message}`);
+      setError(`Sync failed: ${formatError(err)}`);
     } finally {
       setSyncing(false);
     }

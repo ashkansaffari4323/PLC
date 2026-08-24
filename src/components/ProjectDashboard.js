@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatError } from '../api/client';
 import { RefreshCw, LayoutDashboard, CheckCircle2, Clock, Lock, CircleDashed, UserCheck } from 'lucide-react';
 import { gateService } from '../api/gateService';
 import { summarizeGates, findCurrentGate, statusLabel } from '../utils/gateStatus';
@@ -57,7 +58,7 @@ const ProjectDashboard = ({ selectedProject }) => {
       setGates(g);
       setPhases(p);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,7 @@ const ProjectDashboard = ({ selectedProject }) => {
       const updated = await syncAndSaveGates(selectedProject.id, gates);
       setGates(updated);
     } catch (err) {
-      setError(`Sync failed: ${err.message}`);
+      setError(`Sync failed: ${formatError(err)}`);
     } finally {
       setSyncing(false);
     }

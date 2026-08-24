@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatError } from '../api/client';
 import {
   Building2, RefreshCw, AlertTriangle, Lock, FolderKanban,
   Search, ChevronDown, ChevronRight, UserCheck, FileText,
@@ -154,7 +155,7 @@ const HubDashboard = ({ selectedHub }) => {
         setProjectData({});
       }
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -181,7 +182,7 @@ const HubDashboard = ({ selectedHub }) => {
       }
       setProjectData(updatedData);
     } catch (err) {
-      setError(`Sync failed: ${err.message}`);
+      setError(`Sync failed: ${formatError(err)}`);
     } finally {
       setSyncing(false);
     }

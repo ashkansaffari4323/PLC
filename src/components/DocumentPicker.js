@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatError } from '../api/client';
 import { Folder, File, ChevronRight, ArrowLeft, X, Loader2, Check, FileText } from 'lucide-react';
 import { folderService } from '../api/folderService';
 
@@ -25,7 +26,7 @@ const DocumentPicker = ({ hubId, projectId, initialSelected = [], onConfirm, onC
       setItems(folders);
       setPath([]);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -43,7 +44,7 @@ const DocumentPicker = ({ hubId, projectId, initialSelected = [], onConfirm, onC
       setItems(contents);
       setPath((prev) => [...prev, folder]);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -85,7 +86,7 @@ const DocumentPicker = ({ hubId, projectId, initialSelected = [], onConfirm, onC
       }
       setSelected((prev) => [...prev, { id: file.id, name: resolved.name || file.name, versionId: resolved.tipVersionId }]);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setResolvingId(null);
     }

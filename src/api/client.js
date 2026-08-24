@@ -56,3 +56,13 @@ export const apiClient = {
   post: (path, body) => request(path, { method: 'POST', body }),
   delete: (path) => request(path, { method: 'DELETE' }),
 };
+
+/** Combines an error's generic message with the backend's real detail, when present, for display. */
+export function formatError(err) {
+  if (!err) return 'Unknown error';
+  if (err.details) {
+    const detailText = typeof err.details === 'string' ? err.details : JSON.stringify(err.details);
+    return `${err.message}: ${detailText}`;
+  }
+  return err.message;
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatError } from '../api/client';
 import { Folder, File, ChevronRight, ArrowLeft, Files } from 'lucide-react';
 import { folderService } from '../api/folderService';
 import PageHeader from './ui/PageHeader';
@@ -19,7 +20,7 @@ const FileBrowser = ({ selectedHub, selectedProject }) => {
       setItems(folders);
       setPath([]);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -37,7 +38,7 @@ const FileBrowser = ({ selectedHub, selectedProject }) => {
       setItems(contents);
       setPath((prev) => [...prev, folder]);
     } catch (err) {
-      setError(err.message);
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
