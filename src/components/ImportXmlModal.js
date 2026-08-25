@@ -127,6 +127,8 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
   const [fileName, setFileName] = useState('');
   const [selectedIndices, setSelectedIndices] = useState(null); // Set, null until rows load
   const [filterText, setFilterText] = useState('');
+  const [selectedMsPhases, setSelectedMsPhases] = useState(new Set());
+  const [selectedMsGates, setSelectedMsGates] = useState(new Set());
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
@@ -147,6 +149,8 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
       const msProject = tryParseMsProjectXml(doc);
       if (msProject && (msProject.phases.length > 0 || msProject.gates.length > 0)) {
         setMsProjectData(msProject);
+        setSelectedMsPhases(new Set(msProject.phases.map((_, i) => i)));
+        setSelectedMsGates(new Set(msProject.gates.map((_, i) => i)));
         return;
       }
 
@@ -206,9 +210,41 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
     setSelectedIndices((prev) => new Set([...prev].filter((i) => !visibleSet.has(i))));
   };
 
-  // MS Project path preview (hierarchy based)
-  const msValidGates = msProjectData ? msProjectData.gates.filter((g) => isValidDateRange(g.startDate, g.finishDate)) : [];
-  const msInvalidCount = msProjectData ? msProjectData.gates.length - msValidGates.length : 0;
+  // MS Project path preview (hierarchy based). Each gate keeps its
+  // original array index (gIndex) so checkboxes and phase-cascade toggling
+  // stay correctly matched after filtering by phase.
+  const msGatesWithIndex = msProjectData ? msProjectData.gates.map((g, i) => ({ ...g, gIndex: i })) : [];
+  const msValidGates = msGatesWithIndex.filter((g) => isValidDateRange(g.startDate, g.finishDate));
+  const msInvalidCount = msGatesWithIndex.length - msValidGates.length;
+
+  const togglePhase = (pIndex) => {
+    const phaseGateIndices = msValidGates.filter((g) => g.phaseIndex === pIndex).map((g) => g.gIndex);
+    setSelectedMsPhases((prev) => {
+      const next = new Set(prev);
+      const including = !next.has(pIndex);
+      if (including) next.add(pIndex);
+      else next.delete(pIndex);
+      // Including/excluding a phase cascades to all its gates.
+      setSelectedMsGates((prevGates) => {
+        const nextGates = new Set(prevGates);
+        phaseGateIndices.forEach((gi) => (including ? nextGates.add(gi) : nextGates.delete(gi)));
+        return nextGates;
+      });
+      return next;
+    });
+  };
+
+  const toggleMsGate = (gIndex) => {
+    setSelectedMsGates((prev) => {
+      const next = new Set(prev);
+      if (next.has(gIndex)) next.delete(gIndex);
+      else next.add(gIndex);
+      return next;
+    });
+  };
+
+  const selectedMsPhaseCount = msProjectData ? msProjectData.phases.filter((_, i) => selectedMsPhases.has(i)).length : 0;
+  const selectedMsGateCount = msValidGates.filter((g) => selectedMsGates.has(g.gIndex)).length;
 
   const handleConfirmGeneric = () => {
     const gates = genericPreview
@@ -218,7 +254,26 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
   };
 
   const handleConfirmMsProject = () => {
-    onImport({ newPhases: msProjectData.phases, gates: msValidGates });
+    // Re-index kept phases so phaseIndex references stay contiguous and
+    // correct after some phases are excluded.
+    const keptPhases = msProjectData.phases
+      .map((p, i) => ({ ...p, originalIndex: i }))
+      .filter((p) => selectedMsPhases.has(p.originalIndex));
+    const newPhaseIndexByOriginal = {};
+    keptPhases.forEach((p, newIndex) => {
+      newPhaseIndexByOriginal[p.originalIndex] = newIndex;
+    });
+
+    const gates = msValidGates
+      .filter((g) => selectedMsGates.has(g.gIndex) && (g.phaseIndex === null || selectedMsPhases.has(g.phaseIndex)))
+      .map((g) => ({
+        name: g.name,
+        startDate: g.startDate,
+        finishDate: g.finishDate,
+        phaseIndex: g.phaseIndex !== null ? newPhaseIndexByOriginal[g.phaseIndex] : null,
+      }));
+
+    onImport({ newPhases: keptPhases.map(({ name, startDate, finishDate }) => ({ name, startDate, finishDate })), gates });
   };
 
   const hasResults = msProjectData || rows.length > 0;
@@ -260,33 +315,46 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
               )}
 
               <div className="border border-slate-100 rounded-xl divide-y divide-slate-50 max-h-72 overflow-y-auto">
-                {msProjectData.phases.map((phase, pIndex) => (
-                  <div key={pIndex} className="px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                      <Layers className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
-                      {phase.name}
-                      <span className="text-xs text-slate-400 font-normal ml-auto whitespace-nowrap">
-                        {phase.startDate || '—'} → {phase.finishDate || '—'}
-                      </span>
+                {msProjectData.phases.map((phase, pIndex) => {
+                  const phaseGates = msValidGates.filter((g) => g.phaseIndex === pIndex);
+                  const phaseChecked = selectedMsPhases.has(pIndex);
+                  return (
+                    <div key={pIndex} className="px-3.5 py-2.5">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-800 cursor-pointer">
+                        <input type="checkbox" checked={phaseChecked} onChange={() => togglePhase(pIndex)} className="flex-shrink-0" />
+                        <Layers className="h-3.5 w-3.5 text-indigo-500 flex-shrink-0" />
+                        {phase.name}
+                        <span className="text-xs text-slate-400 font-normal ml-auto whitespace-nowrap">
+                          {phase.startDate || '—'} → {phase.finishDate || '—'}
+                        </span>
+                      </label>
+                      <div className={`mt-1.5 ml-7 space-y-1 ${phaseChecked ? '' : 'opacity-40 pointer-events-none'}`}>
+                        {phaseGates.map((g) => (
+                          <label key={g.gIndex} className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedMsGates.has(g.gIndex)}
+                              onChange={() => toggleMsGate(g.gIndex)}
+                              disabled={!phaseChecked}
+                              className="flex-shrink-0"
+                            />
+                            <span className="truncate flex-1">{g.name}</span>
+                            <span className="text-slate-400 whitespace-nowrap">{g.startDate || '—'} → {g.finishDate || '—'}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                    <div className="mt-1.5 ml-5 space-y-1">
-                      {msValidGates.filter((g) => g.phaseIndex === pIndex).map((g, gIndex) => (
-                        <div key={gIndex} className="flex items-center justify-between text-xs text-slate-500">
-                          <span className="truncate">{g.name}</span>
-                          <span className="text-slate-400 whitespace-nowrap ml-2">{g.startDate || '—'} → {g.finishDate || '—'}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {msValidGates.filter((g) => g.phaseIndex === null).length > 0 && (
                   <div className="px-3.5 py-2.5">
                     <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">No phase</div>
-                    {msValidGates.filter((g) => g.phaseIndex === null).map((g, gIndex) => (
-                      <div key={gIndex} className="flex items-center justify-between text-xs text-slate-500">
-                        <span className="truncate">{g.name}</span>
+                    {msValidGates.filter((g) => g.phaseIndex === null).map((g) => (
+                      <label key={g.gIndex} className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+                        <input type="checkbox" checked={selectedMsGates.has(g.gIndex)} onChange={() => toggleMsGate(g.gIndex)} className="flex-shrink-0" />
+                        <span className="truncate flex-1">{g.name}</span>
                         <span className="text-slate-400 whitespace-nowrap ml-2">{g.startDate || '—'} → {g.finishDate || '—'}</span>
-                      </div>
+                      </label>
                     ))}
                   </div>
                 )}
@@ -387,10 +455,10 @@ const ImportXmlModal = ({ phases, onImport, onClose }) => {
             {msProjectData ? (
               <button
                 onClick={handleConfirmMsProject}
-                disabled={msProjectData.phases.length === 0 && msValidGates.length === 0}
+                disabled={selectedMsPhaseCount === 0 && selectedMsGateCount === 0}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
               >
-                <Check className="h-4 w-4" /> Create {msProjectData.phases.length} phase{msProjectData.phases.length === 1 ? '' : 's'} & {msValidGates.length} gate{msValidGates.length === 1 ? '' : 's'}
+                <Check className="h-4 w-4" /> Create {selectedMsPhaseCount} phase{selectedMsPhaseCount === 1 ? '' : 's'} & {selectedMsGateCount} gate{selectedMsGateCount === 1 ? '' : 's'}
               </button>
             ) : (
               <button

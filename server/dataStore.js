@@ -75,6 +75,16 @@ async function writeCollection(kind, id, value) {
     await kv.set(`${kind}:${safeId(id)}`, value);
     return value;
   }
+  if (process.env.VERCEL) {
+    // Running on Vercel without a Redis integration connected - file
+    // writes will always fail here (read-only serverless filesystem), so
+    // fail with an actionable message instead of a cryptic EROFS error.
+    throw new Error(
+      'Gate/phase storage needs a Redis integration connected to this Vercel project ' +
+      '(Vercel dashboard -> Storage -> connect a Redis database), then redeploy. ' +
+      'File-based storage does not work on Vercel\'s serverless functions.'
+    );
+  }
   return writeFileCollection(kind, id, value);
 }
 
