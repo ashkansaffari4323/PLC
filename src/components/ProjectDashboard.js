@@ -184,12 +184,12 @@ const ProjectDashboard = ({ selectedProject }) => {
               ? [...new Set((gate.criteria || []).filter((c) => c.reviewStatus === 'in-progress').flatMap((c) => getReviewerNames(c.nextActionBy)))]
               : [];
           return (
-            <div key={gate.id} className="flex items-center justify-between bg-white border border-slate-200/70 shadow-sm rounded-xl px-4 py-3.5">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900">{gate.name}</div>
-                {phase && <div className="text-xs text-slate-400 mt-0.5">{phase.name}</div>}
+            <div key={gate.id} className="flex items-center justify-between gap-3 bg-white border border-slate-200/70 shadow-sm rounded-xl px-4 py-3.5">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-slate-900 truncate" title={gate.name}>{gate.name}</div>
+                {phase && <div className="text-xs text-slate-400 mt-0.5 truncate">{phase.name}</div>}
                 {reviewerNames.length > 0 && (
-                  <div className="flex items-center gap-1.5 text-xs text-blue-500 mt-1">
+                  <div className="flex items-center gap-1.5 text-xs text-blue-500 mt-1 min-w-0">
                     <UserCheck className="h-3 w-3 flex-shrink-0" />
                     <span className="truncate">Waiting on: {reviewerNames.join(', ')}</span>
                   </div>

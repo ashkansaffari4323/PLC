@@ -49,8 +49,8 @@ const ProjectListRow = ({ project, gates, phases, expanded, onToggle }) => {
         {expanded ? <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
 
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-slate-900 truncate">{project.name}</div>
-          <div className="text-xs text-slate-400 mt-0.5">
+          <div className="text-sm font-semibold text-slate-900 truncate" title={project.name}>{project.name}</div>
+          <div className="text-xs text-slate-400 mt-0.5 truncate">
             {currentPhase ? currentPhase.name : summary.total === 0 ? 'Not configured yet' : '—'}
             {current && <> · Open gate: <span className="text-slate-500">{current.name}</span></>}
           </div>
@@ -253,6 +253,30 @@ const HubDashboard = ({ selectedHub }) => {
 
   const filteredProjects = projects.filter((p) => p.name?.toLowerCase().includes(search.toLowerCase()));
 
+  // Classify each project into one group so a hub with many projects reads
+  // as "what needs attention" first, rather than one flat alphabetical list.
+  const classify = (project) => {
+    const data = projectData[project.id] || { gates: [] };
+    const summary = summarizeGates(data.gates);
+    const { reviewers } = getPendingReviewInfo(data.gates);
+    if (summary.total === 0) return 'unconfigured';
+    if (reviewers.length > 0 || summary.inProgress > 0) return 'needsAttention';
+    if (summary.completed === summary.total) return 'completed';
+    return 'notStarted';
+  };
+
+  const groups = [
+    { key: 'needsAttention', label: 'Needs attention', items: [] },
+    { key: 'notStarted', label: 'Not started yet', items: [] },
+    { key: 'completed', label: 'Completed', items: [] },
+    { key: 'unconfigured', label: 'Not configured', items: [] },
+  ];
+  const groupByKey = Object.fromEntries(groups.map((g) => [g.key, g]));
+  filteredProjects.forEach((project) => {
+    groupByKey[classify(project)].items.push(project);
+  });
+  const nonEmptyGroups = groups.filter((g) => g.items.length > 0);
+
   return (
     <div className="p-6">
       <PageHeader
@@ -327,25 +351,35 @@ const HubDashboard = ({ selectedHub }) => {
             />
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm divide-y divide-slate-50 overflow-hidden">
+          <div className="space-y-5">
             {filteredProjects.length === 0 ? (
-              <div className="p-1">
+              <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm p-1">
                 <EmptyState icon={Search} title="No projects match your search" />
               </div>
             ) : (
-              filteredProjects.map((project) => {
-                const data = projectData[project.id] || { gates: [], phases: [] };
-                return (
-                  <ProjectListRow
-                    key={project.id}
-                    project={project}
-                    gates={data.gates || []}
-                    phases={data.phases || []}
-                    expanded={expandedId === project.id}
-                    onToggle={() => setExpandedId(expandedId === project.id ? null : project.id)}
-                  />
-                );
-              })
+              nonEmptyGroups.map((group) => (
+                <div key={group.key}>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{group.label}</h3>
+                    <span className="text-xs text-slate-300">{group.items.length}</span>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200/70 shadow-sm divide-y divide-slate-50 overflow-hidden">
+                    {group.items.map((project) => {
+                      const data = projectData[project.id] || { gates: [], phases: [] };
+                      return (
+                        <ProjectListRow
+                          key={project.id}
+                          project={project}
+                          gates={data.gates || []}
+                          phases={data.phases || []}
+                          expanded={expandedId === project.id}
+                          onToggle={() => setExpandedId(expandedId === project.id ? null : project.id)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </>
